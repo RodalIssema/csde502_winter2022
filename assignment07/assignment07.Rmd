@@ -1,7 +1,7 @@
 ---
 title: "Assignment 7"
 author: "Rodal Issema"
-date: "2/25/2022"
+date: "`r Sys.Date()`"
 output:
   bookdown::html_document2:
     toc: true
