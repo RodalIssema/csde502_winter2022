@@ -1,0 +1,160 @@
+---
+title: "Assignment 7"
+author: "Rodal Issema"
+date: "2/25/2022"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+    toc_depth: 6
+    self_contained: true
+    number_sections: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+pacman::p_load(tidyverse, haven, curl, magrittr, janitor, gt, captioner)
+
+table_nums <- captioner(prefix = "Table")
+figure_nums <- captioner(prefix = "Figure")
+
+```
+
+
+# Get, subset, and clean data
+
+Used year of birth, biological sex, ever had sex, and race variables as variables in subsetted data
+
+```{r}
+#temporary destination folder
+mytempdir <- tempdir()
+
+# download and unzip the larger data set
+myUrl <- "http://staff.washington.edu/phurvitz/csde502_winter_2021/data/21600-0001-Data.dta.zip"
+
+# zip file in $temp -- basename gets just the file name from the URL and not the URL path;
+#   file.path stitches the tempdir() path to the file name
+zipfile <- file.path(mytempdir, basename(myUrl))
+
+# dta file in $temp
+dtafile <- tools::file_path_sans_ext(zipfile)
+
+# check if the dta file exists
+if (!file.exists(dtafile)) {
+    # if the dta file doesn't exist, check for the zip file
+    # check if the zip file exists, download if necessary
+    if (!file.exists(zipfile)) {
+        curl::curl_download(url = myUrl, destfile = zipfile)
+    }
+    # unzip the downloaded zip file
+    if (file.exists(zipfile)) {
+        unzip(zipfile = zipfile, exdir = mytempdir)
+    }
+}
+
+# if the data set has not been read, read it in
+if (!exists("ah_dt")) {
+    ah_dt <- haven::read_dta(dtafile)
+}
+
+# lowercase column names
+colnames(ah_dt) %<>% str_to_lower()
+
+#working with people born between 1977 to 1980
+dt <- ah_dt %>% 
+  mutate(race = case_when(h1gi6a == 1 | h1gi8 == 1 ~ 1,
+                          h1gi6b == 1 | h1gi8 == 2 ~ 2,
+                          h1gi6c == 1 | h1gi8 == 3 ~ 3,
+                          h1gi6d == 1 | h1gi8 == 4 ~ 4,
+                          h1gi6e == 1 | h1gi8 == 5 ~ 5,
+                          TRUE ~ 9),
+         race = factor(race, levels = c(1:5, 9), labels = c('White', 'Black/African American', 'American Indian', 'Asian/Pacific Islander', 'Other', 'Unknown/Missing'))) %>% 
+  select(year_born = h1gi1y, sex = bio_sex, race, 	ever_have_sex = h1co1) %>%
+  filter(year_born %in% 77:80) %>% 
+  mutate(sex = factor(sex, levels = c(1, 2), labels = c("Male", "Female")), 
+         ever_have_sex = factor(ever_have_sex, levels = c(0, 1, 6, 8), labels = c("No", "Yes", "Refused", "DK")),
+         year_born = factor(year_born, levels = 77:80, labels = 1977:1980))
+
+#save df as RDS in temp folder
+saveRDS(object = dt, file = file.path(mytempdir, "AHwave1_subset.RDS"))
+
+```
+
+# Tables
+
+```{r}
+# frequency table (counts and percentages)
+count_pct <- function(x) {
+  x %>%
+    janitor::tabyl() %>% 
+    adorn_totals("row") %>%
+    adorn_pct_formatting() %>% 
+    gt()
+}
+
+dt$year_born %>% count_pct()
+```
+
+*`r table_nums(name = "YearBorn_freq", caption = "Year of birth; frequency (%)")`*
+
+```{r}
+dt$sex %>% count_pct()
+```
+*`r table_nums(name = "Sex_freq", caption = "Biological sex; frequency (%)")`*
+
+
+```{r}
+dt$race %>% count_pct()
+```
+
+*`r table_nums(name = "Race_freq", caption = "Race; frequency (%)")`*
+
+```{r}
+dt$ever_have_sex %>% count_pct()
+```
+
+*`r table_nums(name = "EverHadSex_freq", caption = "Ever had sex; frequency (%)")`*
+
+
+```{r}
+# frequency table 2 variables, counts & percentages
+dt %>% 
+  group_by(year_born, ever_have_sex) %>% 
+  tally() %>% 
+  mutate(pct = round(100* n/sum(n), 2),
+         n_pct = paste0(n, " (", pct, "%)")) %>% 
+  select(-n, -pct) %>% 
+  gt()
+
+```
+
+*`r table_nums(name = "YearBorn_EverHadSex", caption = "2x2 tabulation of year of birth and ever had sex variables")`*
+
+# Figure
+```{r}
+dt %>% 
+  filter(ever_have_sex %in% c("Yes", "No")) %>% 
+  group_by(year_born, race) %>% 
+  summarise(n = sum(ever_have_sex == "Yes")) %>% 
+  group_by(year_born) %>% 
+  mutate(pct = n/sum(n)) %>% 
+  ungroup() %>% 
+  ggplot(aes(year_born, pct,group = race, color = race) )+ 
+  geom_line() +
+  theme_minimal() +
+  labs(x = "Year of birth", y = "Ever had sex (%)")
+```
+
+*`r figure_nums(name = "EverHadSex", caption = "Percentage of people who ever had sex by birth year and race")`*
+
+
+# Rmd code
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE} 
+```
+
