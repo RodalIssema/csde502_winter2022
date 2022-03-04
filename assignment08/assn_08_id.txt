@@ -1,1 +1,0 @@
-the URL to my Rmd file for assignment 8 on github is: https://github.com/RodalIssema/csde502_winter2022
